@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<PackageReference Include="EvDb.Abstractions" Version="4.0.13" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Funds.Abstractions\Funds.Abstractions.csproj" />
+	</ItemGroup>
+
+</Project>

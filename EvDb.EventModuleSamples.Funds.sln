@@ -1,0 +1,84 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36221.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
+		.editorconfig = .editorconfig
+		.gitignore = .gitignore
+		Directory.Build.props = Directory.Build.props
+		Doc.md = Doc.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Request Withdraw Funds Via ATM", "Request Withdraw Funds Via ATM", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Events", "Events", "{8D102B2B-6E94-4876-9090-54FED79F7475}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Messages", "Messages", "{0FA61930-EE89-47F3-A287-4F8A31EFF4C2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Slices", "Slices", "{FC80C4A8-C9E2-4E6C-9E84-356936DA23CD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Swimlanes", "Swimlanes", "{2AD79C7B-4BD0-4E76-8EB5-59A010328875}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ATM Fetch Funds", "ATM Fetch Funds", "{116116B0-437F-4C09-85D6-F9856E2322CE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ATM Funds", "ATM Funds", "{7E3433AC-D969-4D93-90CF-C5C4107F6272}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Events", "Funds.RequestWithdrawFundsViaATM.Events\Funds.RequestWithdrawFundsViaATM.Events.csproj", "{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.Abstractions", "Funds.Abstractions\Funds.Abstractions.csproj", "{AFD24192-48AB-4BF5-B258-A991EB3D00C9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Messages", "Funds.RequestWithdrawFundsViaATM.Messages\Funds.RequestWithdrawFundsViaATM.Messages.csproj", "{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Repository", "Funds.RequestWithdrawFundsViaATM.Repository\Funds.RequestWithdrawFundsViaATM.Repository.csproj", "{5BECD0C4-5512-4488-8BF1-151C2B8D4751}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds", "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds\Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.csproj", "{D2D246CA-E414-47CA-BF50-40E622D2E232}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AFD24192-48AB-4BF5-B258-A991EB3D00C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFD24192-48AB-4BF5-B258-A991EB3D00C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFD24192-48AB-4BF5-B258-A991EB3D00C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFD24192-48AB-4BF5-B258-A991EB3D00C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5BECD0C4-5512-4488-8BF1-151C2B8D4751}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5BECD0C4-5512-4488-8BF1-151C2B8D4751}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5BECD0C4-5512-4488-8BF1-151C2B8D4751}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5BECD0C4-5512-4488-8BF1-151C2B8D4751}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8D102B2B-6E94-4876-9090-54FED79F7475} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{0FA61930-EE89-47F3-A287-4F8A31EFF4C2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{FC80C4A8-C9E2-4E6C-9E84-356936DA23CD} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{2AD79C7B-4BD0-4E76-8EB5-59A010328875} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{116116B0-437F-4C09-85D6-F9856E2322CE} = {FC80C4A8-C9E2-4E6C-9E84-356936DA23CD}
+		{7E3433AC-D969-4D93-90CF-C5C4107F6272} = {2AD79C7B-4BD0-4E76-8EB5-59A010328875}
+		{E8B62898-2E60-5FE2-E4F5-FD7804D56CD9} = {8D102B2B-6E94-4876-9090-54FED79F7475}
+		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5} = {0FA61930-EE89-47F3-A287-4F8A31EFF4C2}
+		{5BECD0C4-5512-4488-8BF1-151C2B8D4751} = {7E3433AC-D969-4D93-90CF-C5C4107F6272}
+		{D2D246CA-E414-47CA-BF50-40E622D2E232} = {116116B0-437F-4C09-85D6-F9856E2322CE}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1F26719C-6C74-4F13-9C9C-9B88C7CDDFC8}
+	EndGlobalSection
+EndGlobal

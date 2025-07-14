@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EvDb.Core" Version="4.0.13" />
+    <PackageReference Include="Riok.Mapperly" Version="4.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Funds.RequestWithdrawFundsViaATM.Events\Funds.RequestWithdrawFundsViaATM.Events.csproj" />
+    <ProjectReference Include="..\Funds.RequestWithdrawFundsViaATM.Messages\Funds.RequestWithdrawFundsViaATM.Messages.csproj" />
+  </ItemGroup>
+
+</Project>
