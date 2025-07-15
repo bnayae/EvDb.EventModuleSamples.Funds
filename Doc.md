@@ -414,6 +414,103 @@ However, you're free to use other types such as:
   }
   ```
 
+## Add swimlane bootstrap
+
+- Add class library project `Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap` under `ATM Funds` swimlane's folder
+- Add project reference `Funds.RequestWithdrawFundsViaATM.Repository`
+- Add package reference `EvDb.Adapters.Store.EvDbMongoDB`
+- Add package reference `EvDb.Sinks.EvDbSinkKafka`
+- Add the following entry into the csproj file
+
+  ```xml
+  <ItemGroup>
+  	<FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  ```
+
+- Add the following type:
+
+  ```cs
+  using Confluent.Kafka;
+  using EvDb.Core;
+  using Microsoft.Extensions.DependencyInjection;
+  using Microsoft.Extensions.Hosting;
+
+  namespace namespace Microsoft.Extensions.DependencyInjection;
+
+  public static class RequestWithdrawFundsViaAtmRepositoryExtensions
+  {
+      private const string DEFAULT_STREAM_PREFIX = "ATM.Funds";
+
+      public static EvDbStorageContext CreateContext(
+                                                  this IHostApplicationBuilder builder,
+                                                  string databaseName)
+      {
+          EvDbStorageContext context = new EvDbStorageContext(databaseName, builder.  Environment.EnvironmentName, DEFAULT_STREAM_PREFIX);
+          return context;
+      }
+
+      public static IHostApplicationBuilder AddRequestWithdrawFundsViaArmRepository(
+                                                  this IHostApplicationBuilder builder,
+                                                  string databaseName)
+      {
+          IServiceCollection services = builder.Services;
+          EvDbStorageContext context = builder.CreateContext(databaseName);
+          services.AddEvDb()
+                  .AddAtmFundsFactory(storage => storage.UseMongoDBStoreForEvDbStream(),   context)
+                  .DefaultSnapshotConfiguration(storage => storage.  UseMongoDBForEvDbSnapshot());
+
+          return builder;
+      }
+
+      public static IHostApplicationBuilder AddRequestWithdrawFundsViaAtmRepository(this   IHostApplicationBuilder builder,
+                                                                               string   databaseName  ,
+                                                                               DateTimeOffs  et since,
+                                                                               string   topicName,
+                                                                               string   kafkaEndpoin  t =   "localhost:9  092")
+      {
+          ProducerConfig config = new ()
+          {
+              BootstrapServers = kafkaEndpoint
+          };
+
+          return builder.AddRequestWithdrawFundsViaAtmRepository(databaseName, config,   since, topicName);
+      }
+
+      public static IHostApplicationBuilder AddRequestWithdrawFundsViaAtmRepository(this   IHostApplicationBuilder builder,
+                                                                               string   databaseName  ,
+                                                                               ProducerConf  ig config,
+                                                                               DateTimeOffs  et since,
+                                                                               string   topicName)
+      {
+          IServiceCollection services = builder.Services;
+          EvDbStorageContext context = builder.CreateContext(databaseName);
+
+          #region Kafka
+
+          services.AddSingleton<IProducer<string, string>>(sp =>
+          {
+              var producer = new ProducerBuilder<string, string>(config)
+                  //.SetValueSerializer(new EvDbMessageSerializer())
+                  .Build();
+              return producer;
+          });
+
+          #endregion //  Kafka
+
+          services.AddEvDb()
+                  .AddSink()
+                  .ForMessages(context)
+                      .AddFilter(EvDbMessageFilter.Create(since))
+                      .AddOptions(EvDbContinuousFetchOptions.ContinueWhenEmpty)
+                      .BuildHostedService()
+                      .SendToKafka(topicName);
+
+          return builder;
+      }
+  }
+  ```
+
 ## ATM Fetch Funds (Slice)
 
 - Add class library project `Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds` under `ATM Fetch Funds` folder
@@ -514,4 +611,245 @@ However, you're free to use other types such as:
           _logger.LogFetchFundsFromAtm(accountId, response);
       }
   }
+  ```
+
+- Add Dependency Injection registration
+
+  ```cs
+  using Funds.Abstractions;
+  using Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds;
+  using Microsoft.Extensions.DependencyInjection;
+  using Microsoft.Extensions.DependencyInjection.Extensions;
+
+  namespace namespace Microsoft.Extensions.DependencyInjection;
+
+  public static class FetchFundsSliceExtensions
+  {
+      public static IServiceCollection TryAddFetchFundsCommand(this IServiceCollection services)
+      {
+          services.TryAddSingleton<ICommandHandler<AtmFundsRequest>,  FetchFundsFromAtmCommand>();
+          return services;
+      }
+  }
+  ```
+
+  ### Add a bootstrap project
+
+  The bootstap is responsible for the slice registration (into Dependency Injection).
+
+- Add class library project `Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap`
+- Add project reference `Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds`
+- Add the following entry into the csproj file
+
+  ```xml
+  <ItemGroup>
+  	<FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  ```
+
+- Add request type
+
+  ```cs
+  using Funds.Abstractions;
+
+  namespace namespace Microsoft.Extensions.DependencyInjection;
+
+  public readonly partial record struct AtmFundsApiRequest
+  {
+      /// <summary>
+      /// The currency of the transaction
+      /// </summary>
+      public required Currency Currency { get; init; }
+      /// <summary>
+      /// The money amount
+      /// </summary>
+      public required double Amount { get; init; }
+  }
+  ```
+
+- Add Dependency Injection extensions
+
+  ```cs
+  using Funds.Abstractions;
+  using Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds;
+  using Microsoft.AspNetCore.Builder;
+  using Microsoft.AspNetCore.Http;
+  using Microsoft.AspNetCore.Routing;
+  using Microsoft.Extensions.DependencyInjection;
+
+  namespace namespace Microsoft.Extensions.DependencyInjection;
+
+  public static class FetchFundsFromAtmBootstrapExtensions
+  {
+      public static IServiceCollection AddRequestWithdrawFundsViaATM(this   IServiceCollection services)
+      {
+          // register the command
+          services.TryAddFetchFundsCommand();
+          return services;
+      }
+
+      public static IEndpointRouteBuilder UseRequestWithdrawFundsViaATM(this   IEndpointRouteBuilder app)
+      {
+          // setup the endpoint
+          var withdraw = app.MapGroup("withdraw")
+           .WithTags("Withdraw");
+
+          withdraw.MapPost("ATM/{account}",
+              async (AccountId account,
+              AtmFundsApiRequest data,
+              ICommandHandler<AtmFundsRequest> slice) =>
+              {
+                  AtmFundsRequest request = new AtmFundsRequest(account)
+                  {
+                      Currency = data.Currency,
+                      Amount = data.Amount
+                  };
+                  await slice.ExecuteAsync(request);
+                  return Results.Ok();
+              });
+          return app;
+      }
+
+  }
+  ```
+
+## Create Flow Deployment
+
+- Add ASP.NET Core Web API project `Funds.RequestWithdrawFundsViaATM.Deployment` under the `Request Withdraw Funds Via ATM` folder
+  - 🗸 Enablecontainer support (Linux)
+  - ✗ Use controllers
+- Cleanup the weatherforecast sample
+- Add project reference `Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap`
+- Add project reference `Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap`
+- Add project reference `OpenTelemetry.Extensions.Hosting`
+- Add project reference `OpenTelemetry.Instrumentation.AspNetCore`
+- Add project reference `OpenTelemetry.Instrumentation.Http`
+- Add project reference `OpenTelemetry.Exporter.OpenTelemetryProtocol`
+- Add project reference `OpenTelemetry.Instrumentation.Runtime`
+- Add connection to the `appsetting.json`
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "EvDbMongoDBConnection": "mongodb://localhost:27017"
+  }
+}
+```
+
+- Add Open Telemetry (Otel) extention
+
+  ```cs
+  using EvDb.Core;
+  using OpenTelemetry.Logs;
+  using OpenTelemetry.Metrics;
+  using OpenTelemetry.Resources;
+  using OpenTelemetry.Trace;
+
+  namespace Microsoft.Extensions.DependencyInjection;
+
+  internal static class OtelExtensions
+  {
+      private const string APP_NAME = "funds:atm";
+
+      public static WebApplicationBuilder AddOtel(this WebApplicationBuilder builder)
+      {
+          string otelHost = $"http://127.0.0.1";
+
+          #region Logging
+
+          ILoggingBuilder loggingBuilder = builder.Logging;
+          loggingBuilder.AddOpenTelemetry(logging =>
+          {
+              var resource = ResourceBuilder.CreateDefault();
+              logging.SetResourceBuilder(resource.AddService(
+                              APP_NAME));  // builder.Environment.ApplicationName
+              logging.IncludeFormattedMessage = true;
+              logging.IncludeScopes = true;
+              logging.AddOtlpExporter()
+                     .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}  :18889"));
+          });
+
+          loggingBuilder.Configure(x =>
+          {
+              x.ActivityTrackingOptions = ActivityTrackingOptions.SpanId
+                | ActivityTrackingOptions.TraceId
+                | ActivityTrackingOptions.Tags;
+          });
+
+          #endregion // Logging}
+
+          var services = builder.Services;
+          services.AddOpenTelemetry()
+                      .ConfigureResource(resource =>
+                                     resource.AddService(APP_NAME,
+                                                      serviceInstanceId: "console-app",
+                                                      autoGenerateServiceInstanceId:   false)) // builder.Environment.  ApplicationName
+              .WithTracing(tracing =>
+              {
+                  tracing
+                          .AddEvDbInstrumentation()
+                          .AddEvDbStoreInstrumentation()
+                          .AddEvDbSinkKafkaInstrumentation()
+                          .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
+                          .SetSampler<AlwaysOnSampler>()
+                          .AddOtlpExporter()
+                          .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}  :18889"));
+              })
+              .WithMetrics(meterBuilder =>
+                      meterBuilder.AddEvDbInstrumentation()
+                                  .AddEvDbStoreInstrumentation()
+                                  .AddEvDbSinkKafkaInstrumentation()
+                                  .AddMeter("MongoDB.Driver.Core.Extensions.  DiagnosticSources")
+                                  .AddOtlpExporter()
+                                  .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"  {otelHost}:18889")));
+
+          return builder;
+      }
+
+  }
+  ```
+
+- Modify `Program.cs`
+
+  ```cs
+  const string DATABASE_NAME = "tests";
+
+  var builder = WebApplication.CreateBuilder(args);
+
+  builder.Services.AddEndpointsApiExplorer();
+  builder.Services.AddSwaggerGen();
+
+  builder.AddOtel();
+
+  var configSection = builder.Configuration.GetSection("RequestWithdrawFundsViaAtm");
+  string dbName = configSection.GetValue<string>("DatabaseName") ?? DATABASE_NAME;
+  string topiName = configSection.GetValue<string>("TopicName") ?? "atm.funds.withdraw";
+  string[] kafkaEndpoints = configSection.GetSection("Kafka")
+                                          .GetValue<string[]>("Endpoint") ?? ["localhost:9092"];
+  builder.Services.TryAddFetchFundsCommand();
+  builder.AddRequestWithdrawFundsViaAtmRepository(dbName);
+  builder.AddRequestWithdrawFundsViaAtmSink(dbName, DateTimeOffset.UtcNow, topiName,   kafkaEndpoints);
+
+  var app = builder.Build();
+
+  // Configure the HTTP request pipeline.
+  if (app.Environment.IsDevelopment())
+  {
+      app.UseSwagger();
+      app.UseSwaggerUI();
+  }
+
+  app.UseHttpsRedirection();
+
+  app.UseRequestWithdrawFundsViaATM();
+
+
+  await app.RunAsync();
   ```

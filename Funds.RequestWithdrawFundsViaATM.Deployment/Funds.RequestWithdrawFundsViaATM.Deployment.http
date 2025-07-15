@@ -1,0 +1,12 @@
+@Funds.RequestWithdrawFundsViaATM.Deployment_HostAddress = http://localhost:5088
+
+POST {{Funds.RequestWithdrawFundsViaATM.Deployment_HostAddress}}/withdraw/ATM/{2D8D4BB6-F26B-4D5E-B9B2-9E1CC07B6CDF}
+Accept: application/json
+Content-Type: application/json
+
+{
+  "Currency": "USD",
+  "Amount": 100.00
+}
+
+###

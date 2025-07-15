@@ -36,6 +36,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsV
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds", "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds\Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.csproj", "{D2D246CA-E414-47CA-BF50-40E622D2E232}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap", "Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap\Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap.csproj", "{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap", "Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap\Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap.csproj", "{7356FBF0-2A97-49CE-B784-29D1E3D09969}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Funds.RequestWithdrawFundsViaATM.Deployment", "Funds.RequestWithdrawFundsViaATM.Deployment\Funds.RequestWithdrawFundsViaATM.Deployment.csproj", "{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -62,6 +68,18 @@ Global
 		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D2D246CA-E414-47CA-BF50-40E622D2E232}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7356FBF0-2A97-49CE-B784-29D1E3D09969}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7356FBF0-2A97-49CE-B784-29D1E3D09969}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7356FBF0-2A97-49CE-B784-29D1E3D09969}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7356FBF0-2A97-49CE-B784-29D1E3D09969}.Release|Any CPU.Build.0 = Release|Any CPU
+		{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -77,6 +95,9 @@ Global
 		{AF922F6A-EE4F-4C63-A749-D2F8D846BCE5} = {0FA61930-EE89-47F3-A287-4F8A31EFF4C2}
 		{5BECD0C4-5512-4488-8BF1-151C2B8D4751} = {7E3433AC-D969-4D93-90CF-C5C4107F6272}
 		{D2D246CA-E414-47CA-BF50-40E622D2E232} = {116116B0-437F-4C09-85D6-F9856E2322CE}
+		{4C6AEBF0-653D-4C7B-8DDF-9CDEA1D8F4D1} = {116116B0-437F-4C09-85D6-F9856E2322CE}
+		{7356FBF0-2A97-49CE-B784-29D1E3D09969} = {7E3433AC-D969-4D93-90CF-C5C4107F6272}
+		{15C78C0B-A057-4D22-ACDF-54FD95E2EAB5} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1F26719C-6C74-4F13-9C9C-9B88C7CDDFC8}
