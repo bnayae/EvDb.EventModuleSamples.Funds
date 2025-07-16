@@ -713,6 +713,29 @@ However, you're free to use other types such as:
   }
   ```
 
+## Kafka to SQS
+
+Build an infrastructue to move kafka messages into SQS (stream into commands).
+
+- Add solution folder `Infrastructure` at the solution root.
+- Add class library project `Kafka2SQS` within the `Infrastructure` folder
+- Add package reference `AWSSDK.SQS`
+- Add package reference `Confluent.Kafka`
+
+- Add the following entry into the csproj file
+
+  ```xml
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  ```
+
+- Add the following types:
+
+```cs
+
+```
+
 ## Create Flow Deployment
 
 - Add ASP.NET Core Web API project `Funds.RequestWithdrawFundsViaATM.Deployment` under the `Request Withdraw Funds Via ATM` folder

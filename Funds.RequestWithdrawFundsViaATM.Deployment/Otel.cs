@@ -49,6 +49,7 @@ internal static class OtelExtensions
                         .AddEvDbInstrumentation()
                         .AddEvDbStoreInstrumentation()
                         .AddEvDbSinkKafkaInstrumentation()
+                        .AddKafka2SQSInstrumentation()
                         .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
                         .SetSampler<AlwaysOnSampler>()
                         .AddOtlpExporter()

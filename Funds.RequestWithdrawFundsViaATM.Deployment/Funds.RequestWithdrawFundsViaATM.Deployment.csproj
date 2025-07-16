@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap\Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap.csproj" />
     <ProjectReference Include="..\Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap\Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap.csproj" />
+    <ProjectReference Include="..\Kafka2SQS\Kafka2SQS.csproj" />
   </ItemGroup>
 
 </Project>
