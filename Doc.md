@@ -719,8 +719,9 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
 
 - Add solution folder `Infrastructure` at the solution root.
 - Add class library project `Kafka2SQS` within the `Infrastructure` folder
-- Add package reference `AWSSDK.SQS`
+- Add package reference `EvDb.Sinks.AwsAdmin`
 - Add package reference `Confluent.Kafka`
+- Add package reference `OpenTelemetry.Api`
 
 - Add the following entry into the csproj file
 
@@ -730,10 +731,309 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
   </ItemGroup>
   ```
 
-- Add the following types:
+- Add `Settings` Folder
+- Add the following types under the `Settings` folder:
 
 ```cs
+namespace Kafka2SQS;
 
+public record KafkaSettings
+{
+    public required string Topic { get; set; }
+    public required string[] Endpoints { get; set; }
+}
+```
+
+```cs
+namespace Kafka2SQS;
+
+public record SqsSettings
+{
+    public required string Endpoint { get; set; }
+    public required string QueueName { get; set; }
+    public required string AccessKeyId { get; set; }
+    public required string SecretAccessKey { get; set; }
+    public required string Region { get; set; }
+}
+```
+
+- Add the following types (under the project root):
+
+```cs
+using Microsoft.Extensions.Logging;
+using System.Net;
+
+namespace Kafka2SQS;
+
+internal static partial class Logs
+{
+    [LoggerMessage(LogLevel.Error, "Failed to send message to SQS. Status code: {StatusCode}")]
+    public static partial void LogSQSFailure(this ILogger logger,
+                                                           HttpStatusCode StatusCode);
+
+    [LoggerMessage(LogLevel.Error, "Kafka to SQS failure")]
+    public static partial void LogKafkaToSQSFailure(this ILogger logger,
+                                                           Exception exception);
+
+    [LoggerMessage(LogLevel.Debug, """
+                    Sink SQS: Published to target '{target}', MessageId:{messageId} | EvDb: Status:{httpStatusCode}.
+                    """)]
+    public static partial void LogPublished(this ILogger logger, string target, string messageId, string httpStatusCode);
+
+    [LoggerMessage(LogLevel.Error, """
+                    Sink SQS: Failed to published to target '{target}'.
+                    """)]
+    public static partial void LogPublishFailed(this ILogger logger, string target, Exception exception);
+}
+```
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Kafka2SQS;
+
+internal static class Telemetry
+{
+    public const string TraceName = "Kafka2SQS";
+
+    public static ActivitySource Trace { get; } = new ActivitySource(TraceName);
+}
+
+```
+
+```cs
+using Amazon.Runtime;
+using Amazon.SQS;
+using Amazon.SQS.Model;
+using Confluent.Kafka;
+using Microsoft.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
+
+namespace Kafka2SQS;
+
+public class Kafka2SQSHostedService : BackgroundService
+{
+    private readonly AmazonSQSClient _sqsClient;
+    private readonly ILogger<Kafka2SQSHostedService> _logger;
+    private readonly SqsSettings _sqsSettings;
+    private readonly KafkaSettings _kafkaSettings;
+    private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
+
+
+    public Kafka2SQSHostedService(
+        ILogger<Kafka2SQSHostedService> logger,
+        IOptions<KafkaSettings> kafkaOptions,
+        IOptions<SqsSettings> sqsOptions) : this(logger, kafkaOptions.Value, sqsOptions.Value)
+    {
+    }
+
+    public Kafka2SQSHostedService(
+        ILogger<Kafka2SQSHostedService> logger,
+        KafkaSettings kafkaSettings,
+        SqsSettings sqsSettings)
+    {
+        var config = new AmazonSQSConfig
+        {
+            ServiceURL = sqsSettings.Endpoint,
+            // AuthenticationRegion = REGION
+            UseHttp = true
+        };
+        BasicAWSCredentials credentials = new BasicAWSCredentials(sqsSettings.AccessKeyId,
+            sqsSettings.SecretAccessKey);
+        _sqsClient = new AmazonSQSClient(credentials, config);
+        _logger = logger;
+        _sqsSettings = sqsSettings;
+        _kafkaSettings = kafkaSettings;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await _sqsClient.GetOrCreateQueueAsync(_sqsSettings.QueueName, TimeSpan.FromDays(3), _logger, stoppingToken);
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = string.Join(',', _kafkaSettings.Endpoints),
+            GroupId = "Kafka2SQSGroup",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false
+        };
+
+        using var consumer = new ConsumerBuilder<string, string>(config).Build();
+        consumer.Subscribe(_kafkaSettings.Topic);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await Task.Yield(); // Yield to avoid blocking the thread
+
+            try
+            {
+                var consumeResult = consumer.Consume(stoppingToken);
+                if (consumeResult == null)
+                    continue;
+
+
+                using var activity = Telemetry.Trace.StartActivity("Kafka -> SQS", ActivityKind.Consumer);
+
+                // Extract parent context from Kafka headers
+                var parentContext = Propagator.Extract(default, consumeResult.Message.Headers, static (headers, key) =>
+                {
+                    var header = headers.FirstOrDefault(h => h.Key == key);
+                    return header is null ? Enumerable.Empty<string>() : [Encoding.UTF8.GetString(header.GetValueBytes())];
+                });
+                var parentLink = new ActivityLink(parentContext.ActivityContext);
+                activity?.AddLink(parentLink);
+
+                using var kafkaActivity = Telemetry.Trace.StartActivity("Kafka Message Consumed", ActivityKind.Consumer);
+
+                var response = await PublishAsync(
+                    _sqsSettings.QueueName,
+                    consumeResult.Message.Value,
+                    null, // No specific serializer options
+                    stoppingToken);
+
+                #region consumer.Commit(consumeResult)
+
+                if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
+                {
+                    // Commit only after successful send
+                    consumer.Commit(consumeResult);
+                }
+                else
+                {
+                    _logger.LogSQSFailure(response.HttpStatusCode);
+                    kafkaActivity?.SetStatus(ActivityStatusCode.Error);
+                }
+
+                #endregion //  consumer.Commit(consumeResult)
+
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogKafkaToSQSFailure(ex);
+                consumer.Subscribe(_kafkaSettings.Topic); // re-listen to the topic
+            }
+        }
+
+        consumer.Close();
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _sqsClient.Dispose();
+    }
+
+    private async Task<SendMessageResponse> PublishAsync(string target,
+                                                    string message,
+                                                    JsonSerializerOptions? serializerOptions,
+                                                    CancellationToken cancellationToken)
+    {
+
+        using var activity = Telemetry.Trace.StartActivity("Sending to SQS", ActivityKind.Producer);
+
+        // Create SNS message attributes dictionary
+        var messageAttributes = new Dictionary<string, MessageAttributeValue>();
+
+        // Get the current propagation context
+        var propagationContext = new PropagationContext(
+            activity?.Context ?? default,
+            Baggage.Create()
+        );
+
+        Propagator.Inject(propagationContext, messageAttributes, (
+                    Dictionary<string, MessageAttributeValue> carrier,
+                    string key,
+                    string value) =>
+                            {
+                                carrier[key] = new MessageAttributeValue
+                                {
+                                    DataType = "String",
+                                    StringValue = value
+                                };
+                            });
+
+        var request = new SendMessageRequest
+        {
+            QueueUrl = target,
+            MessageBody = message,
+            MessageAttributes = messageAttributes,
+        };
+
+        try
+        {
+            SendMessageResponse response = await _sqsClient.SendMessageAsync(request, cancellationToken);
+            _logger.LogPublished(target, response.MessageId, response.HttpStatusCode.ToString());
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogPublishFailed(target, ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
+    }
+}
+
+
+```
+
+```cs
+using Kafka2SQS;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
+
+namespace Microsoft.Extensions.DependencyInjection;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddKafka2SQSHostedService(
+        this IServiceCollection services,
+        Action<KafkaSettings> kafkaOptions,
+        Action<SqsSettings> sqsOptions)
+    {
+        services.Configure(kafkaOptions);
+        services.Configure(sqsOptions);
+        services.AddHostedService<Kafka2SQSHostedService>();
+        return services;
+    }
+    public static IServiceCollection AddKafka2SQSHostedService(
+        this IServiceCollection services,
+        KafkaSettings kafkaSettings,
+        SqsSettings sqsSettings)
+    {
+        services.AddHostedService<Kafka2SQSHostedService>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<Kafka2SQSHostedService>>();
+            var result = new Kafka2SQSHostedService(logger, kafkaSettings, sqsSettings);
+            return result;
+        });
+        return services;
+    }
+
+    public static TracerProviderBuilder AddKafka2SQSInstrumentation(this TracerProviderBuilder builder)
+    {
+        builder.AddSource(Telemetry.TraceName);
+        return builder;
+    }
+
+}
 ```
 
 ## Create Flow Deployment
@@ -743,28 +1043,45 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
   - ✗ Use controllers
 - Cleanup the weatherforecast sample
 - Add project reference `Funds.RequestWithdrawFundsViaATM.Slices.AtmFetchFunds.Bootstrap`
-- Add project reference `Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap`
-- Add project reference `OpenTelemetry.Extensions.Hosting`
-- Add project reference `OpenTelemetry.Instrumentation.AspNetCore`
-- Add project reference `OpenTelemetry.Instrumentation.Http`
-- Add project reference `OpenTelemetry.Exporter.OpenTelemetryProtocol`
-- Add project reference `OpenTelemetry.Instrumentation.Runtime`
-- Add connection to the `appsetting.json`
+- References
+  - Add project reference `Funds.RequestWithdrawFundsViaATM.Repository.Bootstrap`
+  - Add project reference `Kafka2SQS`
+  - Add project reference `OpenTelemetry.Extensions.Hosting`
+  - Add project reference `OpenTelemetry.Instrumentation.AspNetCore`
+  - Add project reference `OpenTelemetry.Instrumentation.Http`
+  - Add project reference `OpenTelemetry.Exporter.OpenTelemetryProtocol`
+  - Add project reference `OpenTelemetry.Instrumentation.Runtime`
+- Set up the `appsettings.Development.json`
 
-```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
+  ```json
+  {
+    "Logging": {
+      "LogLevel": {
+        "Default": "Information",
+        "Microsoft.AspNetCore": "Warning"
+      }
+    },
+    "RequestWithdrawFundsViaAtm": {
+      "DatabaseName": "test",
+      "Kafka": {
+        "Topic": "atm.funds.withdraw",
+        "Endpoints": ["localhost:9092"]
+      },
+      "AWS": {
+        "SQS": {
+          "Region": "us-east-1",
+          "AccessKeyId": "test",
+          "SecretAccessKey": "test",
+          "Endpoint": "http://localhost:4566",
+          "QueueName": "withdraw_approval"
+        }
+      }
+    },
+    "ConnectionStrings": {
+      "EvDbMongoDBConnection": "mongodb://localhost:27017"
     }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "EvDbMongoDBConnection": "mongodb://localhost:27017"
   }
-}
-```
+  ```
 
 - Add Open Telemetry (Otel) extention
 
@@ -796,7 +1113,7 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
               logging.IncludeFormattedMessage = true;
               logging.IncludeScopes = true;
               logging.AddOtlpExporter()
-                     .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}  :18889"));
+                     .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}:18889"));
           });
 
           loggingBuilder.Configure(x =>
@@ -813,25 +1130,26 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
                       .ConfigureResource(resource =>
                                      resource.AddService(APP_NAME,
                                                       serviceInstanceId: "console-app",
-                                                      autoGenerateServiceInstanceId:   false)) // builder.Environment.  ApplicationName
+                                                      autoGenerateServiceInstanceId: false)) // builder.Environment.ApplicationName
               .WithTracing(tracing =>
               {
                   tracing
                           .AddEvDbInstrumentation()
                           .AddEvDbStoreInstrumentation()
                           .AddEvDbSinkKafkaInstrumentation()
+                          .AddKafka2SQSInstrumentation()
                           .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")
                           .SetSampler<AlwaysOnSampler>()
                           .AddOtlpExporter()
-                          .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}  :18889"));
+                          .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}:18889"));
               })
               .WithMetrics(meterBuilder =>
                       meterBuilder.AddEvDbInstrumentation()
                                   .AddEvDbStoreInstrumentation()
                                   .AddEvDbSinkKafkaInstrumentation()
-                                  .AddMeter("MongoDB.Driver.Core.Extensions.  DiagnosticSources")
+                                  .AddMeter("MongoDB.Driver.Core.Extensions.DiagnosticSources")
                                   .AddOtlpExporter()
-                                  .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"  {otelHost}:18889")));
+                                  .AddOtlpExporter("aspire", o => o.Endpoint = new Uri($"{otelHost}:18889")));
 
           return builder;
       }
@@ -842,6 +1160,9 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
 - Modify `Program.cs`
 
   ```cs
+  using Kafka2SQS;
+  using Microsoft.Extensions.DependencyInjection;
+
   const string DATABASE_NAME = "tests";
 
   var builder = WebApplication.CreateBuilder(args);
@@ -853,12 +1174,17 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
 
   var configSection = builder.Configuration.GetSection("RequestWithdrawFundsViaAtm");
   string dbName = configSection.GetValue<string>("DatabaseName") ?? DATABASE_NAME;
-  string topiName = configSection.GetValue<string>("TopicName") ?? "atm.funds.withdraw";
-  string[] kafkaEndpoints = configSection.GetSection("Kafka")
-                                          .GetValue<string[]>("Endpoint") ?? ["localhost:9092"];
+  KafkaSettings kafkaSettings = configSection.GetSection("Kafka").Get<KafkaSettings>();
+  string[] kafkaEndpoints = kafkaSettings.Endpoints;
+  SqsSettings sqsSettings = configSection.GetSection("AWS")
+                                         .GetSection("SQS")
+                                         .Get<SqsSettings>() ?? throw new Exception("AWS SQS configuration is missing");
+
   builder.Services.TryAddFetchFundsCommand();
   builder.AddRequestWithdrawFundsViaAtmRepository(dbName);
-  builder.AddRequestWithdrawFundsViaAtmSink(dbName, DateTimeOffset.UtcNow, topiName,   kafkaEndpoints);
+  builder.AddRequestWithdrawFundsViaAtmSink(dbName, DateTimeOffset.UtcNow, kafkaSettings.Topic, kafkaEndpoints);
+
+  builder.Services.AddKafka2SQSHostedService(kafkaSettings, sqsSettings);
 
   var app = builder.Build();
 
@@ -873,6 +1199,234 @@ Build an infrastructue to move kafka messages into SQS (stream into commands).
 
   app.UseRequestWithdrawFundsViaATM();
 
-
   await app.RunAsync();
   ```
+
+## Docker Compose
+
+In order to run it on local machine set the following docker compose each under a dedicated folder.
+
+```yml
+name: evdb-sample-databases
+
+volumes:
+  mssql:
+  psql:
+  mongodb_data:
+
+services:
+  #  sqlserver:
+  #    container_name: sqlserver-event-source-sample
+  #    image: mcr.microsoft.com/mssql/server:2022-latest
+  #    environment:
+  #      SA_PASSWORD: "MasadNetunim12!@"
+  #      ACCEPT_EULA: "Y"
+  #    ports:
+  #      - "1433:1433"
+  #    # command: sh -c ' chmod +x /docker_init/entrypoint.sh; /docker_init/entrypoint.sh & /opt/mssql/bin/sqlservr;'
+  #    restart: unless-stopped
+  #
+  #  psql:
+  #    container_name: psql-event-source-sample
+  #    image: postgres:latest
+  #    environment:
+  #      POSTGRES_USER: test_user
+  #      POSTGRES_PASSWORD: MasadNetunim12!@
+  #      POSTGRES_DB: test_db
+  #    volumes:
+  #      - psql:/var/lib/postgresql/data
+  #      - ./dev/docker_psql_init:/docker-entrypoint-initdb.d
+  #    ports:
+  #      - 5432:5432
+  #    restart: unless-stopped
+
+  mongodb:
+    image: mongo:8
+    container_name: mongodb-event-source-sample
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      #  MONGO_INITDB_ROOT_USERNAME: rootuser
+      #  MONGO_INITDB_ROOT_PASSWORD: MasadNetunim12!@
+      MONGO_INITDB_DATABASE: evdb
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    ports:
+      - "27017:27017"
+    command: "--bind_ip_all --quiet --logpath /dev/null --replSet rs0"
+    restart: unless-stopped
+
+  mongo-init:
+    image: mongo:8
+    container_name: mongodb-event-source-sample-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command: >
+      mongosh --host mongodb:27017 --eval
+      '
+      rs.initiate( {
+         _id : "rs0",
+         members: [
+            { _id: 0, host: "localhost:27017" }
+         ]
+      })
+      '
+    restart: no
+```
+
+```yml
+name: evdb-sample-kafka
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: unless-stopped # on-failure
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    restart: unless-stopped # on-failure
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092"
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    restart: unless-stopped # on-failure
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:3.30.0
+    container_name: kafdrop
+    depends_on:
+      - kafka
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:29092"
+      JVM_OPTS: "-Xms32M -Xmx64M"
+    restart: unless-stopped
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+    restart: unless-stopped
+```
+
+```yml
+name: evdb-sample-localstack
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566" # Edge port
+    environment:
+      - SERVICES=sqs,sns
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: awslocal sns list-topics
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  guistack:
+    image: visualvincent/guistack:latest
+    container_name: guistack
+    ports:
+      - "5000:80"
+    environment:
+      - AWS_SNS_ENDPOINT_URL=http://localstack:4566
+      - AWS_SQS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+    depends_on:
+      - localstack
+    restart: unless-stopped
+
+volumes:
+  localstack_data:
+```
+
+```yml
+version: "3.7"
+name: evdb-sample-otel
+services:
+  jaeger:
+    image: jaegertracing/opentelemetry-all-in-one
+    container_name: evdb-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - 16686:16686
+      - 4318:4318
+      - 4317:4317
+    restart: unless-stopped
+  aspire-dashboard:
+    # https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/configuration
+    image: mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest
+    container_name: evdb-aspire-dashboard
+    ports:
+      - 18888:18888
+      - 18889:18889
+      # - 4317:18889
+    environment:
+      - DASHBOARD__TELEMETRYLIMITS__MAXLOGCOUNT=1000
+      - DASHBOARD__TELEMETRYLIMITS__MAXTRACECOUNT=1000
+      - DASHBOARD__TELEMETRYLIMITS__MAXMETRICCOUNT=1000
+      - DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+    restart: unless-stopped
+```

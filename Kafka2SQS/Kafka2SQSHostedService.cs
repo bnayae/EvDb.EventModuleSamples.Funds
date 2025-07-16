@@ -2,14 +2,15 @@ using Amazon.Runtime;
 using Amazon.SQS;
 using Amazon.SQS.Model;
 using Confluent.Kafka;
+using Microsoft.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions;
 
 namespace Kafka2SQS;
 
@@ -72,7 +73,21 @@ public class Kafka2SQSHostedService : BackgroundService
                 if (consumeResult == null)
                     continue;
 
-                using var activity = Telemetry.Trace.StartActivity("Kafka Message Consumed", ActivityKind.Consumer);
+                #region  using var activity = Telemetry.Trace.StartActivity("Kafka Message Consumed", ActivityKind.Consumer)
+
+                using var activity = Telemetry.Trace.StartActivity("Kafka -> SQS", ActivityKind.Consumer);
+
+                // Extract parent context from Kafka headers
+                var parentContext = Propagator.Extract(default, consumeResult.Message.Headers, static (headers, key) =>
+                {
+                    var header = headers.FirstOrDefault(h => h.Key == key);
+                    return header is null ? Enumerable.Empty<string>() : [Encoding.UTF8.GetString(header.GetValueBytes())];
+                });
+                var parentLink = new ActivityLink(parentContext.ActivityContext);
+                activity?.AddLink(parentLink);
+
+                #endregion //   using var activity = Telemetry.Trace.StartActivity("Kafka Message Consumed", ActivityKind.Consumer)
+                using var kafkaActivity = Telemetry.Trace.StartActivity("Kafka Message Consumed", ActivityKind.Consumer);
 
                 var response = await PublishAsync(
                     _sqsSettings.QueueName,
@@ -90,6 +105,7 @@ public class Kafka2SQSHostedService : BackgroundService
                 else
                 {
                     _logger.LogSQSFailure(response.HttpStatusCode);
+                    kafkaActivity?.SetStatus(ActivityStatusCode.Error);
                 }
 
                 #endregion //  consumer.Commit(consumeResult)
@@ -171,7 +187,7 @@ public class Kafka2SQSHostedService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogPublishFailed(target, ex);
-
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
     }

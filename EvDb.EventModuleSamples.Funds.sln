@@ -49,8 +49,24 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{072491FB-63CC-4E79-8E30-7B5080602186}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DBs", "DBs", "{5F60BE8F-A403-464E-9B94-AD3D214ABEE0}"
+	ProjectSection(SolutionItems) = preProject
+		docker\DBs\compose.yaml = docker\DBs\compose.yaml
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Localstack", "Localstack", "{2A560F50-57EF-476C-AF7C-4469AC9CAB4F}"
+	ProjectSection(SolutionItems) = preProject
+		docker\localstack\docker-compose.yml = docker\localstack\docker-compose.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "kafka-all-in-one-community", "kafka-all-in-one-community", "{5B07BD8D-1E17-4B1D-AFA5-9262836B7E91}"
+	ProjectSection(SolutionItems) = preProject
+		docker\kafka-all-in-one-community\Compose.yml = docker\kafka-all-in-one-community\Compose.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "OTEL", "OTEL", "{E603423A-AE1B-4420-B278-7DD4F657E7B0}"
+	ProjectSection(SolutionItems) = preProject
+		docker\OTEL\compose.yaml = docker\OTEL\compose.yaml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -115,6 +131,8 @@ Global
 		{000E3D8E-52A0-4A2F-B4A6-911440001373} = {6703B070-6CF6-41AA-ACCD-776D8E6C89DB}
 		{5F60BE8F-A403-464E-9B94-AD3D214ABEE0} = {072491FB-63CC-4E79-8E30-7B5080602186}
 		{2A560F50-57EF-476C-AF7C-4469AC9CAB4F} = {072491FB-63CC-4E79-8E30-7B5080602186}
+		{5B07BD8D-1E17-4B1D-AFA5-9262836B7E91} = {072491FB-63CC-4E79-8E30-7B5080602186}
+		{E603423A-AE1B-4420-B278-7DD4F657E7B0} = {072491FB-63CC-4E79-8E30-7B5080602186}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {1F26719C-6C74-4F13-9C9C-9B88C7CDDFC8}

@@ -5,7 +5,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="AWSSDK.SQS" Version="4.0.0.14" />
 	  <PackageReference Include="Confluent.Kafka" Version="2.10.1" />
 	  <PackageReference Include="EvDb.Sinks.AwsAdmin" Version="4.0.13" />
 	  <PackageReference Include="OpenTelemetry.Api" Version="1.11.2" />
